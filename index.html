@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Manager Futuristic - Profesional</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { background: linear-gradient(145deg,#a0c4ff,#bdb2ff,#ffc6ff); font-family: 'Inter', sans-serif; margin-bottom:100px;}
+.card { border-radius:20px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); box-shadow:0 6px 20px rgba(0,0,0,0.15); transition: transform 0.3s, box-shadow 0.3s; margin-bottom:20px;}
+.card:hover { transform: translateY(-3px); box-shadow:0 12px 28px rgba(0,0,0,0.25);}
+.table th { background-color: rgba(200,200,200,0.3); text-align:center;}
+.section { display: none; padding: 15px; animation: fadeIn 0.4s ease;}
+.show { display: block;}
+@keyframes fadeIn { from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);} }
+.bottom-nav { position: fixed; bottom:0; width:100%; height:70px; background-color: rgba(255,255,255,0.97); display:flex; justify-content:space-around; align-items:center; border-top:1px solid #ccc; z-index:999;}
+.bottom-nav button { background: none; border:none; flex-direction: column; font-size:12px; color:#555; display:flex; align-items:center; transition: color 0.3s;}
+.bottom-nav button.active { color:#0d6efd; font-weight:bold;}
+.bottom-nav i { font-size:22px; margin-bottom:2px;}
+.filter-btn { margin-right:5px; transition:0.2s;}
+.filter-btn.active { background:#0d6efd; color:#fff;}
+.btn-gradient { background: linear-gradient(90deg,#00ffcc,#0099ff); color:#000; font-weight:bold; transition:0.3s;}
+.btn-gradient:hover { opacity:0.9;}
+.total-box { font-size:18px; font-weight:bold; color:#198754; text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="container py-3">
+<h2 class="text-center mb-4">📦 Stock Barang Manager</h2>
+
+<!-- Tambah/Edit Produk -->
+<div class="section card p-3" id="addProduct">
+<h5>Tambah / Edit Produk</h5>
+<form id="productForm">
+<input type="hidden" id="editIndex">
+<div class="mb-2"><input type="text" id="productName" class="form-control" placeholder="Nama Barang" required></div>
+<div class="mb-2"><input type="number" id="productPrice" class="form-control" placeholder="Harga" required min="0"></div>
+<div class="mb-2"><input type="number" id="productStock" class="form-control" placeholder="Stok Awal" required min="0"></div>
+<button type="submit" class="btn w-100 btn-gradient">Simpan Produk</button>
+</form>
+</div>
+
+<!-- Catat Penjualan -->
+<div class="section card p-3" id="saleProduct">
+<h5>Catat Penjualan</h5>
+<form id="saleForm">
+<div class="mb-2"><input type="text" id="buyerName" class="form-control" placeholder="Nama Pembeli" required></div>
+<div class="mb-2"><select id="productSelect" class="form-select" required></select></div>
+<div class="mb-2"><input type="number" id="qty" class="form-control" placeholder="Jumlah Memesan" required min="1"></div>
+<button type="submit" class="btn w-100 btn-gradient">Catat Penjualan</button>
+</form>
+</div>
+
+<!-- Daftar Produk -->
+<div class="section card p-3" id="productList">
+<h5>Daftar Produk</h5>
+<div class="table-responsive">
+<table class="table table-bordered text-center">
+<thead><tr><th>Nama</th><th>Harga</th><th>Stok</th><th>Aksi</th></tr></thead>
+<tbody id="productTable"></tbody>
+</table>
+</div>
+</div>
+
+<!-- Riwayat & Chart -->
+<div class="section" id="historyChart">
+
+<div class="card p-3 mb-3">
+<h5>Riwayat Transaksi (5 Terbaru)</h5>
+<div class="table-responsive">
+<table class="table table-striped text-center">
+<thead><tr><th>Waktu</th><th>Pembeli</th><th>Produk</th><th>Jumlah</th><th>Total</th></tr></thead>
+<tbody id="historyTable"></tbody>
+</table>
+</div>// ======= RENDER =======
+function render(){
+const productTable=document.getElementById("productTable");
+const productSelect=document.getElementById("productSelect");
+const historyTable=document.getElementById("historyTable");
+const orderTable=document.getElementById("orderTable");
+productTable.innerHTML=""; productSelect.innerHTML=""; historyTable.innerHTML=""; orderTable.innerHTML="";
+
+state.products.forEach((p,i)=>{
+productTable.innerHTML+=`<tr>
+<td>${p.name}</td><td>Rp ${p.price.toLocaleString()}</td><td>${p.stock}</td>
+<td><button class="btn btn-warning btn-sm" onclick="editProduct(${i})">Edit</button>
+<button class="btn btn-danger btn-sm" onclick="deleteProduct(${i})">Hapus</button></td>
+</tr>`;
+productSelect.innerHTML+=<option value="${i}">${p.name}</option>;
+});
+
+// History 5 terbaru
+state.history.slice(0,5).forEach(h=>{
+historyTable.innerHTML+=`<tr>
+<td>${h.time}</td><td>${h.buyer}</td><td>${h.name}</td><td>${h.qty}</td><td>Rp ${h.total.toLocaleString()}</td>
+</tr>`;
+});
+
+// Orders
+state.orders.map((o,i)=>({...o,index:i})).filter(o=>o.status===currentFilter).forEach(o=>{
+let badge=o.status==="pending"?'<span class="badge bg-primary">Memesan</span>':o.status==="sold"?'<span class="badge bg-success">Terjual</span>':'<span class="badge bg-danger">Batal Beli</span>';
+orderTable.innerHTML+=`<tr>
+<td>${o.name}</td><td>${o.buyer}</td><td>${o.qty}</td><td>${badge}</td>
+<td>${o.status==="pending"?`<button class="btn btn-success btn-sm" onclick="markSold(${o.index})">Terjual</button>
+<button class="btn btn-danger btn-sm" onclick="markCanceled(${o.index})">Batal</button>`:"-"}</td>
+</tr>`;
+});
+
+updateChart();
+}
+
+// ======= MARK TERJUAL / BATAL =======
+function markSold(i){
+const o=state.orders[i];
+if(o.status!=="pending") return;
+o.status="sold";
+o.total=o.total||o.qty*state.products.find(p=>p.name===o.name)?.price||0;
+save(); render();
+}
+function markCanceled(i){
+const o=state.orders[i];
+if(o.status!=="pending") return;
+const cancelQty=parseInt(prompt(`Jumlah batal beli (max ${o.qty})`,o.qty));
+if(isNaN(cancelQty)||cancelQty<1) return;
+const actualCancel=Math.min(cancelQty,o.qty);
+const prod=state.products.find(p=>p.name===o.name);
+if(prod) prod.stock+=actualCancel;
+state.refunds.unshift({time:new Date().toLocaleString(),buyer:o.buyer,product:o.name,qty:actualCancel,nominal:actualCancel*(prod?prod.price:0)});
+o.qty-=actualCancel;
+if(o.qty===0) o.status="canceled";
+save(); render();
+}
+
+// ======= FORM PRODUK =======
+document.getElementById("productForm").onsubmit=function(e){
+e.preventDefault();
+const name=document.getElementById("productName").value.trim();
+const price=parseInt(document.getElementById("productPrice").value);
+const stock=parseInt(document.getElementById("productStock").value);
+const editIndex=document.getElementById("editIndex").value;
+if(editIndex==="") state.products.push({name,price,stock});
+else state.products[editIndex]={name,price,stock};
+this.reset(); document.getElementById("editIndex").value="";
+save(); render();
+}
+
+// ======= FORM JUAL =======
+document.getElementById("saleForm").onsubmit=function(e){
+e.preventDefault();
+const i=parseInt(document.getElementById("productSelect").value);
+const qty=parseInt(document.getElementById("qty").value);
+const buyer=document.getElementById("buyerName").value.trim();
+if(state.products[i].stock<qty){alert("Stok tidak cukup!"); return;}
+state.products[i].stock-=qty;
+const total=state.products[i].price*qty;
+state.history.unshift({time:new Date().toLocaleString(),buyer,name:state.products[i].name,qty,total});
+state.orders.unshift({buyer,name:state.products[i].name,qty,status:"pending",total});
+this.reset(); document.getElementById("qty").value=1;
+save(); render();
+}
+// ======= EDIT / DELETE =======
+function editProduct(i){
+const p=state.products[i];
+document.getElementById("productName").value=p.name;
+document.getElementById("productPrice").value=p.price;
+document.getElementById("productStock").value=p.stock;
+document.getElementById("editIndex").value=i;
+switchTab('addProduct',document.querySelectorAll(".bottom-nav button")[0]);
+}
+function deleteProduct(i){ if(confirm("Hapus produk ini?")){ state.products.splice(i,1); save(); render(); } }
+
+// ======= CHART =======
+const chartCanvas=document.getElementById("salesChart");
+document.getElementById("chartStart").addEventListener("change", updateChart);
+document.getElementById("chartEnd").addEventListener("change", updateChart);
+
+function updateChart(){
+const start=document.getElementById("chartStart").value;
+const end=document.getElementById("chartEnd").value;
+let filteredOrders=state.orders.filter(o=>o.status==="sold");
+if(start) filteredOrders=filteredOrders.filter(o=>new Date(o.time)>=new Date(start));
+if(end) filteredOrders=filteredOrders.filter(o=>new Date(o.time)<=new Date(end+"T23:59:59"));
+const dataCount={};
+filteredOrders.forEach(o=>{dataCount[o.name]=(dataCount[o.name]||0)+o.qty;});
+const labels=Object.keys(dataCount); const data=Object.values(dataCount);
+if(chart) chart.destroy();
+chart=new Chart(chartCanvas,{type:"bar",data:{labels,datasets:[{label:"Terjual",data,backgroundColor:"rgba(0,255,204,0.7)"}]},options:{responsive:true}});
+}
+
+// ======= MODAL RIWAYAT =======
+const startDateInput=document.getElementById("startDate");
+const endDateInput=document.getElementById("endDate");
+startDateInput.addEventListener("change",filterModalDate);
+endDateInput.addEventListener("change",filterModalDate);
+
+function openModal(){ renderModal(state.history); new bootstrap.Modal(document.getElementById("historyModal")).show(); }
+
+function filterModalDate(){
+let filteredHistory=state.history;
+const start=startDateInput.value;
+const end=endDateInput.value;
+if(start) filteredHistory=filteredHistory.filter(h=>new Date(h.time)>=new Date(start));
+if(end) filteredHistory=filteredHistory.filter(h=>new Date(h.time)<=new Date(end+"T23:59:59"));
+renderModal(filteredHistory);
+}
+
+function renderModal(data){
+const tbody=document.querySelector("#fullHistoryTable tbody");
+tbody.innerHTML="";
+let totalRevenue=0,totalRefund=0;
+data.forEach((h,i)=>{
+let order=state.orders.find(o=>o.buyer===h.buyer && o.name===h.name);
+let status=order?order.status==="pending"?"Memesan":order.status==="sold"?"Terjual":"Batal Beli":"-";
+let refundEntry=state.refunds.find(r=>r.buyer===h.buyer && r.product===h.name);
+let refundText=refundEntry?`${refundEntry.qty} pcs / Rp ${refundEntry.nominal.toLocaleString()}`:"-";
+if(status==="Terjual") totalRevenue+=h.total||0;
+if(refundEntry) totalRefund+=refundEntry.nominal;
+tbody.innerHTML+=`<tr>
+<td>${h.time}</td><td>${h.buyer}</td><td>${h.name}</td><td>${h.qty}</td><td>Rp ${h.total.toLocaleString()}</td><td>${status}</td><td>${refundText}</td>
+<td>${status==="Memesan"?<button class="btn btn-sm btn-danger" onclick="markCanceled(${i})">Batal</button>:"-"}</td>
+</tr>`;
+});
+document.getElementById("modalRevenue").textContent=totalRevenue.toLocaleString();
+document.getElementById("modalRefund").textContent=totalRefund.toLocaleString();
+document.getElementById("modalNet").textContent=(totalRevenue-totalRefund).toLocaleString();
+}
+
+// ======= INITIAL =======
+switchTab('addProduct',document.querySelectorAll(".bottom-nav button")[0]);
+render();
+</script>
+</body>
+</html>
+<button class="btn btn-sm btn-primary mt-2" onclick="openModal()">Lihat Semua Riwayat & Laba/Rugi</button>
